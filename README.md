@@ -1,6 +1,6 @@
 # Connect a SDS011 dust sensor to a ESP 32S with LoRa SX1278 Module RA-02
 
-The ESP will read the data from the sensor and puts it on the LCD display.
+The ESP will read the data from the sensor send it with Lora.
 
 ## Pin layout ESP32
 
