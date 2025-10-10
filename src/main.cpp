@@ -2,9 +2,7 @@
 #include <SdsDustSensor.h>
 #include <SoftwareSerial.h>
 #include <LoRa.h>
-#include "wifiCommunication.h"
-#include "mqtt.h"
-#include "config.h"
+#include <WiFi.h>
 
 #define LORA_FREQ 433E6
 
@@ -19,17 +17,20 @@ void publish_alive();
 void publish_pm_data(float pm25, float pm10);
 void sendMessage(String outgoing);
 
+char ssid[23];
+char sMacAddr[18];
+
 void setup() {
   delay(500);
   Serial.begin(115200);
 
-  wifi_setup();
-  wifi_enable();
-  delay(2000);
-
-  mqtt_setup();
-  mqtt_loop();
-  delay(2000);
+    // Get deviceId
+  uint8_t macAddr[6];
+  snprintf(ssid, 23, "MCUDEVICE-%llX", ESP.getEfuseMac());
+  WiFi.macAddress(macAddr);   // The MAC address is stored in the macAddr array.
+  snprintf(sMacAddr, 18, "%02x:%02x:%02x:%02x:%02x:%02x", macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]);
+  Serial.println(ssid);
+  Serial.println(sMacAddr);
 
   LoRa.setPins(SS, GPIO_NUM_2, GPIO_NUM_4);
   LoRa.setSPIFrequency (20000000);
@@ -57,8 +58,6 @@ void setup() {
 }
 
 void loop() {
-  mqtt_loop();
-
   // Wake up SDS011
   sds.wakeup();
   delay(WAKEUP_WORKING_TIME);
@@ -103,7 +102,6 @@ void publish_pm_data(float pm25, float pm10) {
   payload += sMacAddr;
   payload += "\"";
   payload += "}";
-  publish_mqtt_message(mqttSensorTopic, payload.c_str());
   sendMessage(payload);
 }
 
@@ -123,7 +121,6 @@ void publish_alive() {
   payload += sMacAddr;
   payload += "\"";
   payload += "}";
-  publish_mqtt_message(mqqtTopicAlive, payload.c_str());
   sendMessage(payload);
 }
 
