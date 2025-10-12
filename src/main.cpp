@@ -68,7 +68,7 @@ void loop() {
     Serial.print(pm.pm25); // float, μg/m3
     Serial.print(", PM10 = ");
     Serial.println(pm.pm10);
-    publish_pm_data(pm.pm10, pm.pm25);
+    publish_pm_data(pm.pm25, pm.pm10);
   } else {
     Serial.print("Could not read values from sensor, reason: ");
     Serial.println(pm.statusToString());
