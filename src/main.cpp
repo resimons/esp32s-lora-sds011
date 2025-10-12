@@ -17,6 +17,8 @@ void publish_alive();
 void publish_pm_data(float pm25, float pm10);
 void sendMessage(String outgoing);
 
+unsigned long lastRun = 0;
+
 char ssid[23];
 char sMacAddr[18];
 
@@ -58,32 +60,43 @@ void setup() {
 }
 
 void loop() {
-  // Wake up SDS011
-  sds.wakeup();
-  delay(WAKEUP_WORKING_TIME);
-  // Get data from SDS011
-  PmResult pm = sds.queryPm();
-  if (pm.isOk()) {
-    Serial.print("PM2.5 = ");
-    Serial.print(pm.pm25); // float, μg/m3
-    Serial.print(", PM10 = ");
-    Serial.println(pm.pm10);
-    publish_pm_data(pm.pm25, pm.pm10);
-  } else {
-    Serial.print("Could not read values from sensor, reason: ");
-    Serial.println(pm.statusToString());
+
+  // Check if waited long enough.
+  if ((millis() - lastRun > MEASUREMENT_INTERVAL) || lastRun == 0) {
+
+    // Wake up SDS011
+    sds.wakeup();
+    Serial.println("Waking up sensor");
+    delay(WAKEUP_WORKING_TIME);
+    // Get data from SDS011
+    Serial.println("Querying sensor");
+    PmResult pm = sds.queryPm();
+    if (pm.isOk()) {
+      publish_pm_data(pm.pm25, pm.pm10);
+    } else {
+      Serial.print("Could not read values from sensor, reason: ");
+      Serial.println(pm.statusToString());
+    }
+    // Put SDS011 back to sleep
+    WorkingStateResult state = sds.sleep();
+    if (state.isWorking()) {
+      Serial.println("Problem with sleeping the SDS011 sensor.");
+    } else {
+      Serial.println("SDS011 sensor is sleeping");
+    }
+
+    lastRun = millis();
   }
-  // Put SDS011 back to sleep
-  WorkingStateResult state = sds.sleep();
-  if (state.isWorking()) {
-    Serial.println("Problem with sleeping the SDS011 sensor.");
-  } else {
-    Serial.println("SDS011 sensor is sleeping");
-    delay(MEASUREMENT_INTERVAL);
-  }
+
+  delay(50);
 }
 
 void publish_pm_data(float pm25, float pm10) {
+
+  Serial.print("PM2.5 = ");
+  Serial.print(pm25); // float, μg/m3
+  Serial.print(", PM10 = ");
+  Serial.println(pm10);
 
   // maximum message length 128 Byte
   String payload = "";
