@@ -4,7 +4,7 @@ The ESP will read the data from the sensor send it with Lora.
 
 ## Pin layout ESP32
 
-![image](https://github.com/resimons/esp32s-nodecmu-lora-bme280/blob/main/images/esp32-esp-32s-nodemcu-pinout.jpg)
+![image](https://github.com/resimons/esp32s-car/blob/main/images/ESP32-DEV-CH340-USBC-003.jpg)
 ![image](https://www.tinytronics.nl/image/cache/catalog/products_2022/nova-sds011-high-precision-laser-dust-sensor-1200x1200.jpg)
 
 ## Wiring
@@ -18,8 +18,8 @@ The ESP will read the data from the sensor send it with Lora.
 ## How to connect SDS011 to ESP32
 SDS011 | COLOUR | ESP
 ------------ | ---------- | -------------
-VCC | RED | 5,1V
-GND | BLACK | GND
+VCC | WHITE | 5,1V
+GND | ORANGE | GND
 TX | BLUE | GPIO16
 RX | GREEN | GPIO17
 
