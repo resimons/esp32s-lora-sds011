@@ -3,16 +3,22 @@
 #include <SoftwareSerial.h>
 #include <LoRa.h>
 #include <WiFi.h>
-#include <Adafruit_BME280.h>
+#include <Wire.h>
+#include <SensirionI2CSen5x.h>
 
 #define LORA_FREQ 433E6
+
+#define OLED_SDA 4
+#define OLED_SCL 5
+
+#define rst GPIO_NUM_11
+#define dio0 GPIO_NUM_6
+
 #define SEALEVELPRESSURE_HPA (1013.25)
 
 
-HardwareSerial hs(2); // UART2
+HardwareSerial hs(1); // UART2
 SdsDustSensor sds(hs); //  additional parameters: retryDelayMs and maxRetriesNotAvailable
-SPIClass spi(VSPI);
-Adafruit_BME280 bme;
 
 const int MINUTE = 60000;
 const int WAKEUP_WORKING_TIME = MINUTE; // 30 seconds.
@@ -28,93 +34,222 @@ unsigned long lastRun = 0;
 char ssid[23];
 char sMacAddr[18];
 
-void setup() {
-  delay(500);
-  Serial.begin(115200);
 
-  Wire.begin(SDA, SCL);
+SensirionI2CSen5x sen5x;
+
+void printModuleVersions() {
+  uint16_t error;
+  char errorMessage[256];
+
+  unsigned char productName[32];
+  uint8_t productNameSize = 32;
+
+  error = sen5x.getProductName(productName, productNameSize);
+
+  if (error) {
+    Serial.print("Error trying to execute getProductName(): ");
+    errorToString(error, errorMessage, 256);
+    Serial.println(errorMessage);
+  } else {
+    Serial.print("ProductName:");
+    Serial.println((char*)productName);
+  }
+
+  uint8_t firmwareMajor;
+  uint8_t firmwareMinor;
+  bool firmwareDebug;
+  uint8_t hardwareMajor;
+  uint8_t hardwareMinor;
+  uint8_t protocolMajor;
+  uint8_t protocolMinor;
+
+  error = sen5x.getVersion(firmwareMajor, firmwareMinor, firmwareDebug,
+                           hardwareMajor, hardwareMinor, protocolMajor,
+                           protocolMinor);
+  if (error) {
+    Serial.print("Error trying to execute getVersion(): ");
+    errorToString(error, errorMessage, 256);
+    Serial.println(errorMessage);
+  } else {
+    Serial.print("Firmware: ");
+    Serial.print(firmwareMajor);
+    Serial.print(".");
+    Serial.print(firmwareMinor);
+    Serial.print(", ");
+
+    Serial.print("Hardware: ");
+    Serial.print(hardwareMajor);
+    Serial.print(".");
+    Serial.println(hardwareMinor);
+  }
+}
+
+void printSerialNumber() {
+  uint16_t error;
+  char errorMessage[256];
+  unsigned char serialNumber[32];
+  uint8_t serialNumberSize = 32;
+
+  error = sen5x.getSerialNumber(serialNumber, serialNumberSize);
+  if (error) {
+    Serial.print("Error trying to execute getSerialNumber(): ");
+    errorToString(error, errorMessage, 256);
+    Serial.println(errorMessage);
+  } else {
+    Serial.print("SerialNumber:");
+    Serial.println((char*)serialNumber);
+  }
+}
+
+
+void setup() {
+    delay(5000);
+    Serial.begin(115200);
 
     // Get deviceId
-  uint8_t macAddr[6];
-  snprintf(ssid, 23, "MCUDEVICE-%llX", ESP.getEfuseMac());
-  WiFi.macAddress(macAddr);   // The MAC address is stored in the macAddr array.
-  snprintf(sMacAddr, 18, "%02x:%02x:%02x:%02x:%02x:%02x", macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]);
-  Serial.println(ssid);
-  Serial.println(sMacAddr);
+    uint8_t macAddr[6];
+    snprintf(ssid, 23, "MCUDEVICE-%llX", ESP.getEfuseMac());
+    WiFi.macAddress(macAddr);   // The MAC address is stored in the macAddr array.
+    snprintf(sMacAddr, 18, "%02x:%02x:%02x:%02x:%02x:%02x", macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]);
+    Serial.println(ssid);
+    Serial.println(sMacAddr);
 
-  LoRa.setPins(SS, GPIO_NUM_2, GPIO_NUM_4);
-  LoRa.setSPIFrequency (20000000);
-  LoRa.setTxPower (20);
-  if (!LoRa.begin(LORA_FREQ)) {
-    delay (5000);
-    ESP.restart();
-  }
+    Wire.begin(OLED_SDA, OLED_SCL);
 
-  Serial.println("Looking for sensor");
-  if (! bme.begin(BME280_ADDRESS_ALTERNATE)) {
-    Serial.println("Could not find a valid BME280 sensor, check wiring!");
-    while (1);
-  }
+    delay(1000);
 
-  Serial.println("BME280 sensor found");
+    Serial.println("LoRa init start");
+    LoRa.setPins(SS, rst, dio0);
+    LoRa.setSPIFrequency (20000000);
+    LoRa.setTxPower (20);
+    if (!LoRa.begin(433E6)) {
+        Serial.println("Starting LoRa failed!");
+        delay (5000);
+        ESP.restart();
+    }
 
-  LoRa.setPreambleLength(8);
-  LoRa.setSpreadingFactor(7);
-  LoRa.setSignalBandwidth(125E3);
-  LoRa.setCodingRate4(5);
-  LoRa.setSyncWord(0x12);
+    Serial.println("LoRa started");
 
+    sen5x.begin(Wire);
 
-  publish_alive();
+    uint16_t error;
+    char errorMessage[256];
+    error = sen5x.deviceReset();
+    if (error) {
+        Serial.print("Error trying to execute deviceReset(): ");
+        errorToString(error, errorMessage, 256);
+        Serial.println(errorMessage);
+    }
 
-  Serial.println("SDS011 dust sensor");
-  sds.begin();
-  // Prints SDS011 firmware version:
-  Serial.print("SDS011 ");
-  Serial.println(sds.queryFirmwareVersion().toString()); // prints firmware version
-  Serial.println(sds.setQueryReportingMode().toString()); // ensures sensor is in 'query' reporting mode
+    printSerialNumber();
+    printModuleVersions();
 
-  // suggested rate is 1/60Hz (1m)
-  bme.setSampling(Adafruit_BME280::MODE_FORCED,
-                  Adafruit_BME280::SAMPLING_X1, // temperature
-                  Adafruit_BME280::SAMPLING_X1, // pressure
-                  Adafruit_BME280::SAMPLING_X1, // humidity
-                  Adafruit_BME280::FILTER_OFF   );
+    // set a temperature offset in degrees celsius
+    // Note: supported by SEN54 and SEN55 sensors
+    // By default, the temperature and humidity outputs from the sensor
+    // are compensated for the modules self-heating. If the module is
+    // designed into a device, the temperature compensation might need
+    // to be adapted to incorporate the change in thermal coupling and
+    // self-heating of other device components.
+    //
+    // A guide to achieve optimal performance, including references
+    // to mechanical design-in examples can be found in the app note
+    // “SEN5x – Temperature Compensation Instruction” at www.sensirion.com.
+    // Please refer to those application notes for further information
+    // on the advanced compensation settings used
+    // in `setTemperatureOffsetParameters`, `setWarmStartParameter` and
+    // `setRhtAccelerationMode`.
+    //
+    // Adjust tempOffset to account for additional temperature offsets
+    // exceeding the SEN module's self heating.
+    float tempOffset = 0.0;
+    error = sen5x.setTemperatureOffsetSimple(tempOffset);
+    if (error) {
+        Serial.print("Error trying to execute setTemperatureOffsetSimple(): ");
+        errorToString(error, errorMessage, 256);
+        Serial.println(errorMessage);
+    } else {
+        Serial.print("Temperature Offset set to ");
+        Serial.print(tempOffset);
+        Serial.println(" deg. Celsius (SEN54/SEN55 only");
+    }
+
+    // Start Measurement
+    error = sen5x.startMeasurement();
+    if (error) {
+        Serial.print("Error trying to execute startMeasurement(): ");
+        errorToString(error, errorMessage, 256);
+        Serial.println(errorMessage);
+    }
 }
 
 void loop() {
 
-  // Check if waited long enough.
-  if ((millis() - lastRun > MEASUREMENT_INTERVAL) || lastRun == 0) {
+    uint16_t error;
+    char errorMessage[256];
 
-    // Wake up SDS011
-    sds.wakeup();
-    Serial.println("Waking up sensor");
-    delay(WAKEUP_WORKING_TIME);
-    // Get data from SDS011
-    Serial.println("Querying sensor");
-    PmResult pm = sds.queryPm();
-    if (pm.isOk()) {
-      publish_pm_data(pm.pm25, pm.pm10);
+    delay(1000);
+
+    // Read Measurement
+    float massConcentrationPm1p0;
+    float massConcentrationPm2p5;
+    float massConcentrationPm4p0;
+    float massConcentrationPm10p0;
+    float ambientHumidity;
+    float ambientTemperature;
+    float vocIndex;
+    float noxIndex;
+
+    error = sen5x.readMeasuredValues(
+        massConcentrationPm1p0, massConcentrationPm2p5, massConcentrationPm4p0,
+        massConcentrationPm10p0, ambientHumidity, ambientTemperature, vocIndex,
+        noxIndex);
+
+    if (error) {
+        Serial.print("Error trying to execute readMeasuredValues(): ");
+        errorToString(error, errorMessage, 256);
+        Serial.println(errorMessage);
     } else {
-      Serial.print("Could not read values from sensor, reason: ");
-      Serial.println(pm.statusToString());
+        Serial.print("MassConcentrationPm1p0:");
+        Serial.print(massConcentrationPm1p0);
+        Serial.print("\t");
+        Serial.print("MassConcentrationPm2p5:");
+        Serial.print(massConcentrationPm2p5);
+        Serial.print("\t");
+        Serial.print("MassConcentrationPm4p0:");
+        Serial.print(massConcentrationPm4p0);
+        Serial.print("\t");
+        Serial.print("MassConcentrationPm10p0:");
+        Serial.print(massConcentrationPm10p0);
+        Serial.print("\t");
+        Serial.print("AmbientHumidity:");
+        if (isnan(ambientHumidity)) {
+            Serial.print("n/a");
+        } else {
+            Serial.print(ambientHumidity);
+        }
+        Serial.print("\t");
+        Serial.print("AmbientTemperature:");
+        if (isnan(ambientTemperature)) {
+            Serial.print("n/a");
+        } else {
+            Serial.print(ambientTemperature);
+        }
+        Serial.print("\t");
+        Serial.print("VocIndex:");
+        if (isnan(vocIndex)) {
+            Serial.print("n/a");
+        } else {
+            Serial.print(vocIndex);
+        }
+        Serial.print("\t");
+        Serial.print("NoxIndex:");
+        if (isnan(noxIndex)) {
+            Serial.println("n/a");
+        } else {
+            Serial.println(noxIndex);
+        }
     }
-    // Put SDS011 back to sleep
-    WorkingStateResult state = sds.sleep();
-    if (state.isWorking()) {
-      Serial.println("Problem with sleeping the SDS011 sensor.");
-    } else {
-      Serial.println("SDS011 sensor is sleeping");
-    }
-
-    bme.takeForcedMeasurement();
-    displayAndSendBmeValues();
-
-    lastRun = millis();
-  }
-
-  delay(50);
 }
 
 void publish_pm_data(float pm25, float pm10) {
@@ -144,37 +279,6 @@ void publish_pm_data(float pm25, float pm10) {
   sendMessage(payload);
 }
 
-void displayAndSendBmeValues() {
-
-  String temp = String(bme.readTemperature());
-  String pressure = String(bme.readPressure() / 100);
-  String humidity = String(bme.readHumidity());
-  String altitude = String(bme.readAltitude(SEALEVELPRESSURE_HPA));
-
-  String payload = "";
-  payload += "{\"temperature\":";
-  payload += temp;
-  payload += ",\"pressure\":";
-  payload += pressure;
-  payload += ",\"humidity\":";
-  payload += humidity;
-  payload += ",\"altitude\":";
-  payload += altitude;
-  payload += ",\"sensor\":";
-  payload += "\"bme280\"";
-  payload += ",\"device\":";
-  payload += "\"";
-  payload += ssid;
-  payload += "\"";
-  payload += ",\"mac\":";
-  payload += "\"";
-  payload += sMacAddr;
-  payload += "\"";
-  payload += "}";
-
-  sendMessage(payload);
-}
-
 
 void publish_alive() {
 
@@ -195,9 +299,6 @@ void publish_alive() {
 }
 
 void sendMessage(String outgoing) {
-  LoRa.beginPacket();                   // start packet
-  LoRa.print(outgoing);                 // add payload
-  LoRa.endPacket();                     // finish packet and send it
   Serial.println(outgoing);
 
 }
