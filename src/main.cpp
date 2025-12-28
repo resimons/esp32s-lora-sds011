@@ -8,12 +8,6 @@
 
 #define LORA_FREQ 433E6
 
-#define OLED_SDA 4
-#define OLED_SCL 5
-
-#define rst GPIO_NUM_11
-#define dio0 GPIO_NUM_6
-
 #define SEALEVELPRESSURE_HPA (1013.25)
 
 
@@ -25,82 +19,17 @@ const int WAKEUP_WORKING_TIME = MINUTE; // 30 seconds.
 const int MEASUREMENT_INTERVAL = 2 * MINUTE;
 
 void publish_alive();
-void publish_pm_data(float pm25, float pm10);
+void publish_pm_data(float pm1p0, float pm2p5, float pm4p0, float pm10p0);
+void publish_temp(float temp, float humidity, float gasResistance);
 void sendMessage(String outgoing);
-void displayAndSendBmeValues();
 
 unsigned long lastRun = 0;
 
 char ssid[23];
 char sMacAddr[18];
-
+unsigned char sensorName[32];
 
 SensirionI2CSen5x sen5x;
-
-void printModuleVersions() {
-  uint16_t error;
-  char errorMessage[256];
-
-  unsigned char productName[32];
-  uint8_t productNameSize = 32;
-
-  error = sen5x.getProductName(productName, productNameSize);
-
-  if (error) {
-    Serial.print("Error trying to execute getProductName(): ");
-    errorToString(error, errorMessage, 256);
-    Serial.println(errorMessage);
-  } else {
-    Serial.print("ProductName:");
-    Serial.println((char*)productName);
-  }
-
-  uint8_t firmwareMajor;
-  uint8_t firmwareMinor;
-  bool firmwareDebug;
-  uint8_t hardwareMajor;
-  uint8_t hardwareMinor;
-  uint8_t protocolMajor;
-  uint8_t protocolMinor;
-
-  error = sen5x.getVersion(firmwareMajor, firmwareMinor, firmwareDebug,
-                           hardwareMajor, hardwareMinor, protocolMajor,
-                           protocolMinor);
-  if (error) {
-    Serial.print("Error trying to execute getVersion(): ");
-    errorToString(error, errorMessage, 256);
-    Serial.println(errorMessage);
-  } else {
-    Serial.print("Firmware: ");
-    Serial.print(firmwareMajor);
-    Serial.print(".");
-    Serial.print(firmwareMinor);
-    Serial.print(", ");
-
-    Serial.print("Hardware: ");
-    Serial.print(hardwareMajor);
-    Serial.print(".");
-    Serial.println(hardwareMinor);
-  }
-}
-
-void printSerialNumber() {
-  uint16_t error;
-  char errorMessage[256];
-  unsigned char serialNumber[32];
-  uint8_t serialNumberSize = 32;
-
-  error = sen5x.getSerialNumber(serialNumber, serialNumberSize);
-  if (error) {
-    Serial.print("Error trying to execute getSerialNumber(): ");
-    errorToString(error, errorMessage, 256);
-    Serial.println(errorMessage);
-  } else {
-    Serial.print("SerialNumber:");
-    Serial.println((char*)serialNumber);
-  }
-}
-
 
 void setup() {
     delay(5000);
@@ -114,12 +43,12 @@ void setup() {
     Serial.println(ssid);
     Serial.println(sMacAddr);
 
-    Wire.begin(OLED_SDA, OLED_SCL);
+    Wire.begin(SDA, SCL);
 
     delay(1000);
 
     Serial.println("LoRa init start");
-    LoRa.setPins(SS, rst, dio0);
+    LoRa.setPins(SS, GPIO_NUM_11, GPIO_NUM_6);
     LoRa.setSPIFrequency (20000000);
     LoRa.setTxPower (20);
     if (!LoRa.begin(433E6)) {
@@ -141,8 +70,15 @@ void setup() {
         Serial.println(errorMessage);
     }
 
-    printSerialNumber();
-    printModuleVersions();
+    error = sen5x.getProductName(sensorName, sizeof(sensorName));
+
+    if (!error) {
+        Serial.print("Error trying to execute getProductName(): ");
+        errorToString(error, errorMessage, 256);
+        Serial.println(errorMessage);
+    } else {
+        sprintf((char*)sensorName, "SEN5x");
+    }
 
     // set a temperature offset in degrees celsius
     // Note: supported by SEN54 and SEN55 sensors
@@ -181,14 +117,14 @@ void setup() {
         errorToString(error, errorMessage, 256);
         Serial.println(errorMessage);
     }
+
+    publish_alive();
 }
 
 void loop() {
 
     uint16_t error;
     char errorMessage[256];
-
-    delay(1000);
 
     // Read Measurement
     float massConcentrationPm1p0;
@@ -210,75 +146,62 @@ void loop() {
         errorToString(error, errorMessage, 256);
         Serial.println(errorMessage);
     } else {
-        Serial.print("MassConcentrationPm1p0:");
-        Serial.print(massConcentrationPm1p0);
-        Serial.print("\t");
-        Serial.print("MassConcentrationPm2p5:");
-        Serial.print(massConcentrationPm2p5);
-        Serial.print("\t");
-        Serial.print("MassConcentrationPm4p0:");
-        Serial.print(massConcentrationPm4p0);
-        Serial.print("\t");
-        Serial.print("MassConcentrationPm10p0:");
-        Serial.print(massConcentrationPm10p0);
-        Serial.print("\t");
-        Serial.print("AmbientHumidity:");
-        if (isnan(ambientHumidity)) {
-            Serial.print("n/a");
-        } else {
-            Serial.print(ambientHumidity);
-        }
-        Serial.print("\t");
-        Serial.print("AmbientTemperature:");
-        if (isnan(ambientTemperature)) {
-            Serial.print("n/a");
-        } else {
-            Serial.print(ambientTemperature);
-        }
-        Serial.print("\t");
-        Serial.print("VocIndex:");
-        if (isnan(vocIndex)) {
-            Serial.print("n/a");
-        } else {
-            Serial.print(vocIndex);
-        }
-        Serial.print("\t");
-        Serial.print("NoxIndex:");
-        if (isnan(noxIndex)) {
-            Serial.println("n/a");
-        } else {
-            Serial.println(noxIndex);
+        if (!isnan(massConcentrationPm1p0) && !isnan(ambientTemperature)) {
+            publish_pm_data(massConcentrationPm1p0, massConcentrationPm2p5, massConcentrationPm4p0, massConcentrationPm10p0);
+            publish_temp(ambientTemperature, ambientHumidity, vocIndex);
         }
     }
+
+    delay(60000);
 }
 
-void publish_pm_data(float pm25, float pm10) {
+void publish_pm_data(float pm1p0, float pm2p5, float pm4p0, float pm10p0) {
 
-  Serial.print("PM2.5 = ");
-  Serial.print(pm25); // float, μg/m3
-  Serial.print(", PM10 = ");
-  Serial.println(pm10);
-
-  // maximum message length 128 Byte
-  String payload = "";
-  payload += "{\"PM2_5\":";
-  payload += String(pm25);
-  payload += ",\"PM10\":";
-  payload += String(pm10);
-  payload += ",\"sensor\":";
-  payload += "\"sds011\"";
-  payload += ",\"device\":";
-  payload += "\"";
-  payload += ssid;
-  payload += "\"";
-  payload += ",\"mac\":";
-  payload += "\"";
-  payload += sMacAddr;
-  payload += "\"";
-  payload += "}";
-  sendMessage(payload);
+    String payload = "";
+    payload += "{\"PM1_0\":";
+    payload += String(pm1p0);
+    payload += ",\"PM2_5\":";
+    payload += String(pm2p5);
+    payload += ",\"PM4_0\":";
+    payload += String(pm4p0);
+    payload += ",\"PM10\":";
+    payload += String(pm10p0);
+    payload += ",\"sensor\":";
+    payload += (char *) sensorName;
+    payload += ",\"device\":";
+    payload += "\"";
+    payload += ssid;
+    payload += "\"";
+    payload += ",\"mac\":";
+    payload += "\"";
+    payload += sMacAddr;
+    payload += "\"";
+    payload += "}";
+    sendMessage(payload);
 }
 
+void publish_temp(float temp, float humidity, float gasResistance) {
+
+    String payload = "";
+    payload += "{\"temperature\":";
+    payload += String(temp);
+    payload += ",\"humidity\":";
+    payload += String(humidity);
+    payload += ",\"gas_resistance\":";
+    payload += String(gasResistance);
+    payload += ",\"sensor\":";
+    payload += (char *) sensorName;
+    payload += ",\"device\":";
+    payload += "\"";
+    payload += ssid;
+    payload += "\"";
+    payload += ",\"mac\":";
+    payload += "\"";
+    payload += sMacAddr;
+    payload += "\"";
+    payload += "}";
+    sendMessage(payload);
+}
 
 void publish_alive() {
 
@@ -299,6 +222,8 @@ void publish_alive() {
 }
 
 void sendMessage(String outgoing) {
-  Serial.println(outgoing);
-
+    LoRa.beginPacket();                   // start packet
+    LoRa.print(outgoing);                 // add payload
+    LoRa.endPacket();
+    Serial.println(outgoing);
 }
