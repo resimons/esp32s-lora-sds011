@@ -11,8 +11,8 @@ The ESP will read the data from the sensor send it with Lora.
 
 ## Where to buy
 
-[ESP-32S](https://elektronicavoorjou.nl/product/esp32-development-board-wifi-bluetooth)
-[SDS011](https://www.tinytronics.nl/nl/sensoren/lucht/stof/nova-sds011-hoge-precisie-laser-stofsensor)
+[ESP-32C3](https://www.hobbyelectronica.nl/product/esp32c3-development-board-zonder-serial-chip/)
+[SEN54 Groove all-in-one](https://www.kiwi-electronics.com/nl/grove-sen54-all-in-one-environmental-sensor-voc-rh-temp-pm1-0-2-5-4-10-11382)
 [SX1278](https://elektronicavoorjou.nl/product/sx1278-lora-module-433m-10-km-ra-02/)
 
 ## How to connect SEN54 to ESP32
