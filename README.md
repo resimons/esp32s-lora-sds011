@@ -1,10 +1,10 @@
-# Connect a SDS011 dust sensor to a ESP 32S with LoRa SX1278 Module RA-02
+# Connect a Grove All-in-one dust sensor to a ESP 32c3 with LoRa SX1278 Module RA-02
 
 The ESP will read the data from the sensor send it with Lora.
 
 ## Pin layout ESP32
 
-![image](https://github.com/resimons/esp32s-nodemcu-lora-motion-sensor/blob/main/images/esp32-esp-32s-nodemcu-pinout.jpg)
+![image](https://github.com/resimons/esp32s-lora-sds011/blob/main/images/esp32-pin-layout.png)
 ![image](https://www.tinytronics.nl/image/cache/catalog/products_2022/nova-sds011-high-precision-laser-dust-sensor-1200x1200.jpg)
 
 ## Wiring
