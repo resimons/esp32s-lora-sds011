@@ -1,4 +1,4 @@
-# Connect a Grove All-in-one dust sensor to a ESP 32c3 with LoRa SX1278 Module RA-02
+# Connect a Grove All-in-one SEN54 dust sensor to a ESP 32c3 with LoRa SX1278 Module RA-02
 
 The ESP will read the data from the sensor send it with Lora.
 
@@ -15,13 +15,14 @@ The ESP will read the data from the sensor send it with Lora.
 [SDS011](https://www.tinytronics.nl/nl/sensoren/lucht/stof/nova-sds011-hoge-precisie-laser-stofsensor)
 [SX1278](https://elektronicavoorjou.nl/product/sx1278-lora-module-433m-10-km-ra-02/)
 
-## How to connect SDS011 to ESP32
-SDS011 | COLOUR | ESP
------------- | ---------- | -------------
-VCC | WHITE | 5,1V
-GND | ORANGE | GND
-TX | BLUE | GPIO16
-RX | GREEN | GPIO17
+## How to connect SEN54 to ESP32
+SEN54 | COLOUR | ESP
+------------ |--------| -------------
+VCC | RED    | 5,1V
+GND | BLACK  | GND
+SDA | WHITE  | GPIO04
+SCL | YELLOW | GPIO05
+
 
 # Pinlayout LoRa SX1278 Module ra-02
 
@@ -30,14 +31,13 @@ RX | GREEN | GPIO17
 ## Wiring LoRa SX1278 module with ESP32
 SX1278 | COLOR | ESP32
 -------- |-| ----------
-VCC | RED | 3.3V
+3.3V | RED | 3.3V
 GND | BLACK | GND
-SCK | ORANGE | GPIO18
-MOSI | WHITE | GPIO23
-DIO0 | BROWN | GPIO4
-NSS | BLUE | GPIO5
-MISO | GREEN | GPIO19
-RST | YELLOW | GPIO2
+SCK | ORANGE | GPIO2
+MOSI | WHITE | GPIO3
+DIO0 | BROWN | GPIO6
+NSS | PINK | GPIO7
+MISO | GREY | GPIO10
+RST | YELLOW | GPIO11
 
-[Wiring and more](https://www.circuitstate.com/tutorials/interfacing-ra-01-ra-02-sx1278-lora-modules-with-esp32-using-arduino/)
 [Sample code](https://how2electronics.com/esp32-lora-sx1278-76-transmitter-receiver/)
