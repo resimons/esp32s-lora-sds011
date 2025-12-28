@@ -1,15 +1,11 @@
 #include <Arduino.h>
 #include <SdsDustSensor.h>
-#include <SoftwareSerial.h>
 #include <LoRa.h>
 #include <WiFi.h>
 #include <Wire.h>
 #include <SensirionI2CSen5x.h>
 
 #define LORA_FREQ 433E6
-
-#define SEALEVELPRESSURE_HPA (1013.25)
-
 
 HardwareSerial hs(1); // UART2
 SdsDustSensor sds(hs); //  additional parameters: retryDelayMs and maxRetriesNotAvailable
